@@ -14,7 +14,7 @@ from typing import Tuple
 MODELO_PATH = r"C:/Users/USUARIO/runs/obb/placas_motos_OBB2/weights/best.pt"
 CONF_THRESHOLD = 0.70
 
-OCR_API_KEY = "K87150735388957"
+OCR_API_KEY = "XXXXXXXXX"
 OCR_API_URL = "https://api.ocr.space/parse/image"
 
 # ======================================================
