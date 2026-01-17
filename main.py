@@ -7,6 +7,8 @@ import requests
 import tempfile
 import os
 from typing import Tuple
+from PIL import Image, ExifTags
+import io
 
 # ======================================================
 # CONFIGURACIÓN
@@ -14,7 +16,7 @@ from typing import Tuple
 MODELO_PATH = r"C:/Users/USUARIO/runs/obb/placas_motos_OBB2/weights/best.pt"
 CONF_THRESHOLD = 0.70
 
-OCR_API_KEY = "K87150735388957"
+OCR_API_KEY = ""
 OCR_API_URL = "https://api.ocr.space/parse/image"
 
 # ======================================================
@@ -27,7 +29,36 @@ model = YOLO(MODELO_PATH)
 print("✓ YOLO cargado")
 
 # ======================================================
-# FUNCIONES ORIGINALES 
+# LECTURA DE IMAGEN CON EXIF (CÁMARA)
+# ======================================================
+def leer_imagen_con_exif(file):
+    image = Image.open(io.BytesIO(file.read()))
+
+    try:
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+
+        exif = image._getexif()
+        if exif is not None:
+            orient = exif.get(orientation)
+
+            if orient == 3:
+                image = image.rotate(180, expand=True)
+            elif orient == 6:
+                image = image.rotate(270, expand=True)
+            elif orient == 8:
+                image = image.rotate(90, expand=True)
+    except:
+        pass
+
+    image = image.convert("RGB")
+    np_img = np.array(image)
+    return np_img[:, :, ::-1]   
+
+
+# ======================================================
+# FUNCIONES OCR Y PROCESAMIENTO DE TEXTO
 # ======================================================
 
 def ocr_space_imagen(imagen: np.ndarray, engine: int = 2) -> Tuple[str, float]:
@@ -80,7 +111,7 @@ def filtrar_palabras_no_deseadas(texto: str) -> str:
 
     return texto.strip()
 
-
+# funcion para extraer candidatos a placa del texto OCR
 def extraer_candidatos_placa(texto: str) -> list:
     if not texto:
         return []
@@ -126,7 +157,7 @@ def es_placa_valida(texto: str) -> bool:
     ]
     return any(re.match(p, texto) for p in patrones)
 
-
+# funcion para limpiar el texto de la placa
 def limpiar_texto_placa(texto: str) -> str:
     if not texto:
         return ""
@@ -150,7 +181,7 @@ def limpiar_texto_placa(texto: str) -> str:
 
     return ""
 
-
+# funcion para ordenar los puntos de la caja OBB
 def ordenar_puntos_obb(pts: np.ndarray) -> np.ndarray:
     centroid = pts.mean(axis=0)
     angles = np.arctan2(pts[:, 1] - centroid[1], pts[:, 0] - centroid[0])
@@ -158,7 +189,7 @@ def ordenar_puntos_obb(pts: np.ndarray) -> np.ndarray:
     idx = np.argmin(pts[:, 0] + pts[:, 1])
     return np.roll(pts, -idx, axis=0)
 
-
+# función para extraer la placa usando la caja OBB
 def extraer_placa(imagen: np.ndarray, bbox_obb: np.ndarray) -> np.ndarray:
     pts = ordenar_puntos_obb(np.array(bbox_obb).reshape(4, 2).astype(np.float32))
 
@@ -199,15 +230,19 @@ def detectar_placa():
         return jsonify({"error": "Imagen no enviada"}), 400
 
     file = request.files['image']
+    print("Nombre:", file.filename)
+    print("Content-Type:", file.content_type)
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp:
-        file.save(temp.name)
-        imagen = cv2.imread(temp.name)
-
-    os.unlink(temp.name)
+    imagen = leer_imagen_con_exif(file)
 
     if imagen is None:
         return jsonify({"placa": ""})
+
+    # Normalizar tamaño si viene la img muy grande
+    h, w = imagen.shape[:2]
+    if max(h, w) > 1600:
+        scale = 1600 / max(h, w)
+        imagen = cv2.resize(imagen, (int(w * scale), int(h * scale)))
 
     resultados = model.predict(imagen, conf=CONF_THRESHOLD, imgsz=640, verbose=False)
 
