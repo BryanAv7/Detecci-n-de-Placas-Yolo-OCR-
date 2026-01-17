@@ -16,7 +16,11 @@ import io
 MODELO_PATH = r"C:/Users/USUARIO/runs/obb/placas_motos_OBB2/weights/best.pt"
 CONF_THRESHOLD = 0.70
 
+<<<<<<< HEAD
 OCR_API_KEY = ""
+=======
+OCR_API_KEY = "XXXXXXXXX"
+>>>>>>> 6117d553764af3686e6b64e49b2e3199a1186e56
 OCR_API_URL = "https://api.ocr.space/parse/image"
 
 # ======================================================
